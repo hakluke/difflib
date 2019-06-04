@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+
+	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
 // DeltaType describes the relationship of elements in two
@@ -63,12 +65,17 @@ func (d DiffRecord) String() string {
 }
 
 // Diff returns the result of diffing the seq1 and seq2.
-func Diff(seq1, seq2 []string) (diff []DiffRecord) {
+func Diff(seq1, seq2 []string) ([][]interface{}) {
 	// Trims any common elements at the heads and tails of the
 	// sequences before running the diff algorithm. This is an
 	// optimization.
 	start, end := numEqualStartAndEndElements(seq1, seq2)
+	// fmt.Println(start)
+	// fmt.Println(end)
+	// fmt.Println(len(seq1)-end)
+	// fmt.Println(len(seq2)-end)
 
+	var diff []DiffRecord
 	for _, content := range seq1[:start] {
 		diff = append(diff, DiffRecord{content, Common})
 	}
@@ -79,7 +86,29 @@ func Diff(seq1, seq2 []string) (diff []DiffRecord) {
 	for _, content := range seq1[len(seq1)-end:] {
 		diff = append(diff, DiffRecord{content, Common})
 	}
-	return
+
+	var l, r, num int
+
+	var withLines [][]interface{}
+	for _, d := range diff {
+		if d.Delta == LeftOnly {
+			l++
+			num = l
+			// num = ++l
+		} else if d.Delta == RightOnly {
+			r++
+			num = r
+			// num = ++r
+		} else {
+			r++
+			l++
+			num = -1
+		}
+		line := []interface{}{num, d.Delta, d.Payload}
+		withLines = append(withLines, line) 
+	}
+
+	return withLines
 }
 
 // HTMLDiff returns the results of diffing seq1 and seq2 as an HTML
@@ -94,33 +123,59 @@ func Diff(seq1, seq2 []string) (diff []DiffRecord) {
 // "line-num". The cells that contain deleted elements are decorated
 // with "deleted" and the cells that contain added elements are
 // decorated with "added".
-func HTMLDiff(seq1, seq2 []string) string {
+func HTMLDiff(header string, seq1, seq2 []string) string {
 	buf := bytes.NewBufferString("")
-	i, j := 0, 0
-	for _, d := range Diff(seq1, seq2) {
-		buf.WriteString(`<tr><td class="line-num">`)
-		if d.Delta == Common || d.Delta == LeftOnly {
-			i++
-			fmt.Fprintf(buf, "%d</td><td", i)
-			if d.Delta == LeftOnly {
-				fmt.Fprint(buf, ` class="deleted"`)
+	fmt.Fprintf(buf, `<table class="diff-table"><tr class="table-header"><td><i class="fa fa-chevron-down collapse-icon"></i></td><td colspan="3">%s</td></tr>`, header)
+	
+	difference := Diff(seq1, seq2)
+	// lenDiff := len(difference)
+	var l, r int
+	dmp := diffmatchpatch.New()
+	var wDiffs []diffmatchpatch.Diff 
+	for index, d := range difference {
+		fmt.Fprintf(buf, `<tr>`)
+		num := d[0]
+		if d[1] == LeftOnly {
+			l++
+			if len(difference) != index+1 && difference[index + 1][1] == RightOnly && l == r + 1 {
+				var content string
+				wDiffs = dmp.DiffMain(d[2].(string), difference[index + 1][2].(string), false)
+				for _, w := range wDiffs {
+
+					if w.Type == -1 {
+						content += "<span class=\"deleted-text\">" + w.Text + "</span>"
+					} else if w.Type != 1 {
+						content += w.Text
+					}
+				}
+
+				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num, d[1].(DeltaType).String(), content)
+			} else {
+				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num, d[1].(DeltaType).String(), d[2])
 			}
-			fmt.Fprintf(buf, "><pre>%s</pre>", d.Payload)
-		} else {
-			buf.WriteString("</td><td>")
-		}
-		buf.WriteString("</td><td")
-		if d.Delta == Common || d.Delta == RightOnly {
-			j++
-			if d.Delta == RightOnly {
-				fmt.Fprint(buf, ` class="added"`)
+		} else if d[1] == RightOnly {
+			r++
+			if index != 0 && difference[index - 1][1] == LeftOnly && r == l {
+				var content string
+				for _, w := range wDiffs {
+					if w.Type == 1 {
+						content += "<span class=\"added-text\">" + w.Text + "</span>"
+					} else if w.Type != -1 {
+						content += w.Text
+					}
+				}
+				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num, d[1].(DeltaType).String(), content)
+			} else {
+				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num, d[1].(DeltaType).String(), d[2])
 			}
-			fmt.Fprintf(buf, `><pre>%s</pre></td><td class="line-num">%d`, d.Payload, j)
 		} else {
-			buf.WriteString(`></td><td class="line-num">`)
+			l++ 
+			r++
+			fmt.Fprintf(buf, `<td class="line-num line-num-normal">%d</td><td class="line-num line-num-normal">%d</td><td class="code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, l, r, d[1].(DeltaType).String(), d[2])
 		}
-		buf.WriteString("</td></tr>\n")
+		buf.WriteString("</tr>\n")
 	}
+	buf.WriteString("</table>")
 	return buf.String()
 }
 

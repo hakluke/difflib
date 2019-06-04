@@ -1,111 +1,318 @@
-// Copyright 2012 Aryan Naraghi (aryan.naraghi@gmail.com)
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Note: Vuln to SSRF, so internal use only
 
-// A demo for difflib. This program accepts the paths to two files and
-// launches a web server at port 8080 that serves the diff results.
 package main
 
+
 import (
+	"bufio"
 	"fmt"
 	"github.com/aryann/difflib"
+	"github.com/gorilla/mux"
 	"html"
 	"html/template"
-	"io/ioutil"
+	"log"
 	"net/http"
-	"os"
-	"strings"
 )
-
-var hostPort = "localhost:8080"
 
 var templateString = `
 <!doctype html>
 <html>
+
 <head>
   <meta charset="utf-8" />
-  <title>difflib results</title>
+  <title>File diff</title>
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.6.3/css/all.css"
+    integrity="sha384-UHRtZLI+pbxtHCWp1t77Bi1L4ZtiqrqD80Kn4Z8NTSRyMA2Fd33n5dQ8lWUE00s/" crossorigin="anonymous">
+  <link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.15.8/styles/default.min.css">
   <style type="text/css">
-    table {
-      background-color: lightgrey;
-      border-spacing: 1px;
-    }
+  .hljs {
+    display: inline;
+    overflow-x: none;
+    padding: 0;
+    background: white;
+  }
 
-    tr {
-      background-color: white;
-      border-bottom: 1px solid black;
-    }
+  .diff-table {
+    display: block;
+    overflow-x: auto;
+    margin: 5vw;
+    font-family: Console, Liberation Mono, DejaVu Sans Mono, Bitstream Vera Sans Mono, Courier New;
+    background-color: white;
+    border-collapse: collapse;
+    font-size: 0.9em;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    margin-bottom: 16px;
+    margin-top: 16px;
+  }
 
-    .line-num {
-      width: 50px;
-    }
+  .diff-table>tbody>tr {
+    line-height: 0px;
+    height: 26px !important;
+  }
 
-    .added {
-      background-color: green;
-    }
+  .diff-table>tbody>tr>.code {
+    font-size: 12px;
+    width: 100%;
+  }
 
-    .deleted {
-      background-color: red;
-    }
-  </style>
+  .diff-table>tbody>tr>td {
+    overflow: hidden;
+  }
+
+  .line-num:hover {
+    color: rgba(27, 31, 35, .6);
+  }
+
+  .line-num {
+    cursor: pointer;
+    font-size: 0.8em;
+    padding: 5px;
+    padding-left: 15px;
+    padding-right: 15px;
+    color: rgba(27, 31, 35, .3);
+    background-color: #fcfcfc;
+  }
+
+  .line-num-added {
+    background-color: #cdffd8 !important;
+  }
+
+  .line-num-deleted {
+    background-color: #ffdce0 !important;
+  }
+
+  .line-num .added {
+    background-color: #cdffd8;
+  }
+
+  .line-num .deleted {
+    background-color: #cdffd8;
+  }
+
+  .code {
+    padding-right: 20px;
+    padding-left: 20px;
+    border-color: #bef5cb;
+  }
+
+  .added,
+  .added>pre>code {
+    background-color: #e6ffed !important;
+  }
+
+  .deleted,
+  .deleted>pre>code {
+    background-color: #ffeef0 !important;
+  }
+
+  .table-header {
+    background-color: #fafbfc;
+    height: 32px;
+    border-bottom: 1px solid #ddd;
+  }
+
+  .delta-type {
+    position: relative;
+    top: 12px;
+    left: -10px;
+  }
+
+  .collapse-icon {
+    cursor: pointer;
+    padding: 10px;
+    margin-left: 15px;
+  }
+
+  .deleted-text {
+    color: black !important;
+    padding: 1px;
+    background-color: #fdb8c0;
+    border-bottom-right-radius: .2em;
+    border-top-right-radius: .2em;
+    border-bottom-left-radius: .2em;
+    border-top-left-radius: .2em;
+  }
+
+  .added-text {
+    color: black !important;
+    padding: 1px;
+    background-color: #acf2bd;
+    border-bottom-right-radius: .2em;
+    border-top-right-radius: .2em;
+    border-bottom-left-radius: .2em;
+    border-top-left-radius: .2em;
+  }
+
+  .line-num-added+.code>pre>code:empty {
+    padding: 10px;
+  }
+
+  .fa-copy {
+    position: relative;
+    right: 0px;
+    top: 1px;
+    float: right;
+    color: lightskyblue;
+    border-radius: 60px;
+    box-shadow: 0px 0px 2px #888;
+    padding: 0.4em 0.5em;
+    background-color: white;
+    cursor: pointer;
+  }
+
+  .fa-copy:hover {
+    transform: scale(1.1);
+  }
+</style>
 </head>
-<body>
-  <table>
-    <tr>
-      <th></th>
-      <th><em>{{.Filename1}}</em></th>
-      <th><em>{{.Filename2}}</em></th>
-      <th></th>
-    </tr>
-    {{.Diff}}
-  </table>
+<form action="#" method="POST">
+    <input type="text" name="first" id="first" value="https://varanid.io/static/test.txt">
+    <input type="text" name="second" id="second" value="https://varanid.io/static/test1.txt">
+    <button type="submit">diff</button>
+</form>
+
+{{.Diff}}
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.15.8/highlight.min.js"></script>
+<script>
+  hljs.initHighlightingOnLoad();
+  $(document).ready(function () {
+
+    $(".diff-table > tbody > tr:not(.table-header)").mouseenter(function () {
+      $(this).css({
+        "background": "#f9fbff",
+        "background-color": "#f9fbff"
+      });
+      $(this).find(".hljs").css({
+        "background": "#f9fbff",
+        "background-color": "#f9fbff"
+      });
+
+      $(this).find(".code").prepend("<i class=\"fa fa-copy\"></i>");
+      $(".fa-copy").on("click", function () {
+        copyStringToClipboard($(this).siblings("pre").children("code").text());
+      });
+    });
+
+    $(".diff-table > tbody > tr:not(.table-header)").mouseleave(function () {
+      $(this).css({
+        "background": "white",
+        "background-color": "white"
+      });
+      $(this).find(".hljs").css({
+        "background": "white",
+        "background-color": "white"
+      });
+
+      $(this).find(".code").children(".fa-copy").remove();
+    });
+
+    $(".collapse-icon").on("click", function () {
+      $(this).toggleClass("fa-chevron-down").toggleClass("fa-chevron-right");
+      $(".diff-table > tbody > tr:not(.table-header)").toggle();
+      $(".table-header").children().eq(1).css("width", "100%");
+    });
+
+    var switched = false;
+    $(".line-num").on("click", function () {
+      if (!switched) {
+        $(".code").each(function () {
+          var html = "<td class='" + $(this).attr("class") + "'>" + $(this).html(); + "</td>"
+          console.log(html);
+          if ($(this).siblings().first().hasClass("line-num-added")) {
+            html = "<td></td>";
+            $(this).siblings().first().removeClass("line-num-added")
+          }
+
+          $(html).insertAfter($(this).siblings(".line-num").first());
+          if ($(this).siblings().first().hasClass("line-num-deleted")) {
+            $(this).siblings(".line-num-deleted").eq(1).removeClass("line-num-deleted");
+            $(this).siblings(".code").addClass("deleted");
+            $(this).html("");
+            $(this).removeClass("deleted");
+          }
+        });
+        $(".code").css("width", "50%");
+        $(".code").css("max-width", "50%");
+        switched = true;
+      }
+    });
+  });
+
+  function copyStringToClipboard(str) {
+    // Create new element
+    var el = document.createElement('textarea');
+    // Set value (string to be copied)
+    el.value = str;
+    // Set non-editable to avoid focus and move outside of view
+    el.setAttribute('readonly', '');
+    el.style = {
+      position: 'absolute',
+      left: '-9999px'
+    };
+    document.body.appendChild(el);
+    // Select text inside element
+    el.select();
+    // Copy text to clipboard
+    document.execCommand('copy');
+    // Remove temporary element
+    document.body.removeChild(el);
+  }
+</script>
 </body>
+
 </html>
 `
 
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Fprintf(os.Stderr, "USAGE: %s <file-1> <file-2>\n", os.Args[0])
-		os.Exit(1)
-	}
-	http.HandleFunc("/", diffHandler(os.Args[1], os.Args[2]))
-	fmt.Printf("Starting server at %s.\n", hostPort)
-	err := http.ListenAndServe(hostPort, nil)
-	if err != nil {
-		panic(err)
-	}
+	r := mux.NewRouter()
+	r.HandleFunc("/", Hello)
+	http.Handle("/", r)
+	fmt.Println("Starting up on 8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-// diffHandler returns an http.HandlerFunc that serves the diff of the
-// two given files.
-func diffHandler(filename1, filename2 string) http.HandlerFunc {
-	diff := difflib.HTMLDiff(fileToLines(filename1), fileToLines(filename2))
-	tmpl, _ := template.New("diffTemplate").Parse(templateString)
-	return func(w http.ResponseWriter, r *http.Request) {
-		err := tmpl.Execute(w, map[string]interface{}{
-			"Diff":      template.HTML(diff),
-			"Filename1": filename1,
-			"Filename2": filename2,
-		})
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+func Hello(w http.ResponseWriter, r *http.Request) {
+	var diff string
+	if r.Method == http.MethodPost {
+		if err := r.ParseForm(); err != nil {
+			log.Print(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
+
+		diff = difflib.HTMLDiff("Difference", getResponseAsSlice(r.PostForm["first"][0]), getResponseAsSlice(r.PostForm["second"][0]))
+	}
+
+	tmpl, _ := template.New("diffTemplate").Parse(templateString)
+	err := tmpl.Execute(w, map[string]interface{}{
+		"Diff": template.HTML(diff),
+	})
+	if err != nil {
+		log.Print(err)
 	}
 }
 
-// filesToLines takes a path to a file and returns a string array of
-// the lines in the file. Any HTML in the file is escaped.
-func fileToLines(filename string) []string {
-	contents, _ := ioutil.ReadFile(filename)
-	return strings.Split(html.EscapeString(string(contents)), "\n")
+func getResponseAsSlice(url string) []string {
+	fmt.Println(url)
+	var client http.Client
+	resp, err := client.Get(url)
+	if err != nil {
+		log.Print(err)
+		return []string{}
+	}
+	defer resp.Body.Close()
+
+	s := bufio.NewScanner(resp.Body)
+	body := []string{}
+	for s.Scan() {
+		body = append(body, html.EscapeString(s.Text()))
+	}
+	if err := s.Err(); err != nil {
+		log.Print(err)
+		return []string{}
+	}
+	return body
 }

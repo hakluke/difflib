@@ -6,12 +6,13 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"github.com/aryann/difflib"
+	"github.com/003random/difflib"
 	"github.com/gorilla/mux"
 	"html"
 	"html/template"
 	"log"
-	"net/http"
+  "net/http"
+  "strconv"
 )
 
 var templateString = `
@@ -164,11 +165,24 @@ var templateString = `
   .fa-copy:hover {
     transform: scale(1.1);
   }
+
+  .new-part {
+    height: 30px;
+    background-color: #f6f6f6;
+    width: 100%;
+  }
+
+  .new-part > td {
+    text-align: center;
+    color: gray;
+    opacity: 0.6;
+  }
 </style>
 </head>
 <form action="#" method="POST">
     <input type="text" name="first" id="first" value="https://varanid.io/static/test.txt">
     <input type="text" name="second" id="second" value="https://varanid.io/static/test1.txt">
+    trim:<input type="hidden" name="trim" value="0"><input type="checkbox" onclick="this.previousSibling.value=1-this.previousSibling.value">
     <button type="submit">diff</button>
 </form>
 
@@ -180,7 +194,7 @@ var templateString = `
   hljs.initHighlightingOnLoad();
   $(document).ready(function () {
 
-    $(".diff-table > tbody > tr:not(.table-header)").mouseenter(function () {
+    $(".diff-table > tbody > tr:not(.table-header):not(.new-part)").mouseenter(function () {
       $(this).css({
         "background": "#f9fbff",
         "background-color": "#f9fbff"
@@ -196,7 +210,7 @@ var templateString = `
       });
     });
 
-    $(".diff-table > tbody > tr:not(.table-header)").mouseleave(function () {
+    $(".diff-table > tbody > tr:not(.table-header):not(.new-part)").mouseleave(function () {
       $(this).css({
         "background": "white",
         "background-color": "white"
@@ -238,6 +252,18 @@ var templateString = `
         $(".code").css("max-width", "50%");
         switched = true;
       }
+    });
+    $(".new-part").each(function() {
+        if (!$(this).prev().hasClass("table-header")) {
+            $(this).prev().css({
+                "transform": "scale(1)",
+                "box-shadow": "0 5px 5px -5px #333"
+            });
+        }
+        $(this).next().css({
+            "transform": "scale(1)",
+            "box-shadow": "0 -5px 5px -5px #333"
+        });
     });
   });
 
@@ -283,7 +309,8 @@ func Hello(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		diff = difflib.HTMLDiff("Difference", getResponseAsSlice(r.PostForm["first"][0]), getResponseAsSlice(r.PostForm["second"][0]))
+    trim, _ := strconv.ParseBool(r.PostForm["trim"][0])
+		diff = difflib.HTMLDiff("Difference", getResponseAsSlice(r.PostForm["first"][0]), getResponseAsSlice(r.PostForm["second"][0]), trim)
 	}
 
 	tmpl, _ := template.New("diffTemplate").Parse(templateString)

@@ -2,7 +2,6 @@
 
 package main
 
-
 import (
 	"bufio"
 	"fmt"
@@ -11,8 +10,8 @@ import (
 	"html"
 	"html/template"
 	"log"
-  "net/http"
-  "strconv"
+	"net/http"
+	"strconv"
 )
 
 var templateString = `
@@ -309,7 +308,7 @@ func Hello(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-    trim, _ := strconv.ParseBool(r.PostForm["trim"][0])
+		trim, _ := strconv.ParseBool(r.PostForm["trim"][0])
 		diff = difflib.HTMLDiff("Difference", getResponseAsSlice(r.PostForm["first"][0]), getResponseAsSlice(r.PostForm["second"][0]), trim)
 	}
 

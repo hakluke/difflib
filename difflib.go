@@ -65,47 +65,86 @@ func (d DiffRecord) String() string {
 }
 
 // Diff returns the result of diffing the seq1 and seq2.
-func Diff(seq1, seq2 []string) ([][]interface{}) {
+func Diff(seq1, seq2 []string, trim bool) [][]interface{} {
 	// Trims any common elements at the heads and tails of the
 	// sequences before running the diff algorithm. This is an
 	// optimization.
 	start, end := numEqualStartAndEndElements(seq1, seq2)
-	// fmt.Println(start)
-	// fmt.Println(end)
-	// fmt.Println(len(seq1)-end)
-	// fmt.Println(len(seq2)-end)
 
+	var startedAt int
 	var diff []DiffRecord
-	for _, content := range seq1[:start] {
-		diff = append(diff, DiffRecord{content, Common})
+	if !trim {
+		for _, content := range seq1[:start] {
+			diff = append(diff, DiffRecord{content, Common})
+		}
+	} else {
+		if start > 0 {
+			diff = append([]DiffRecord{DiffRecord{seq1[start-1 : start][0], Common}}, diff...)
+			startedAt = start - 1
+		}
+		if start > 1 {
+			diff = append([]DiffRecord{DiffRecord{seq1[start-2 : start][0], Common}}, diff...)
+			startedAt = start - 2
+		}
+		if start > 2 {
+			diff = append([]DiffRecord{DiffRecord{seq1[start-3 : start][0], Common}}, diff...)
+			startedAt = start - 3
+		}
 	}
 
 	diffRes := compute(seq1[start:len(seq1)-end], seq2[start:len(seq2)-end])
 	diff = append(diff, diffRes...)
 
-	for _, content := range seq1[len(seq1)-end:] {
-		diff = append(diff, DiffRecord{content, Common})
+	if !trim {
+		for _, content := range seq1[len(seq1)-end:] {
+			diff = append(diff, DiffRecord{content, Common})
+		}
+	} else {
+		if end > 0 {
+			diff = append(diff, DiffRecord{seq1[len(seq1)-end : len(seq1)-end+1][0], Common})
+		}
+		if end > 1 {
+			diff = append(diff, DiffRecord{seq1[len(seq1)-end : len(seq1)-end+2][1], Common})
+		}
+		if end > 2 {
+			diff = append(diff, DiffRecord{seq1[len(seq1)-end : len(seq1)-end+3][2], Common})
+		}
 	}
 
-	var l, r, num int
+	var l, r int
 
 	var withLines [][]interface{}
-	for _, d := range diff {
+
+	if trim {
+		l, r = startedAt, startedAt
+	}
+
+	for dIndex, d := range diff {
 		if d.Delta == LeftOnly {
 			l++
-			num = l
 			// num = ++l
 		} else if d.Delta == RightOnly {
 			r++
-			num = r
 			// num = ++r
 		} else {
 			r++
 			l++
-			num = -1
 		}
-		line := []interface{}{num, d.Delta, d.Payload}
-		withLines = append(withLines, line) 
+
+		num := []int{l, r}
+
+		firstBefore := (dIndex != 0 && (diff[dIndex-1].Delta == RightOnly || diff[dIndex-1].Delta == LeftOnly))
+		secondBefore := (dIndex > 1 && (diff[dIndex-2].Delta == RightOnly || diff[dIndex-2].Delta == LeftOnly))
+		thirdBefore := (dIndex > 2 && (diff[dIndex-3].Delta == RightOnly || diff[dIndex-3].Delta == LeftOnly))
+
+		firstAfter := (dIndex < len(diff)-1 && (diff[dIndex+1].Delta == RightOnly || diff[dIndex+1].Delta == LeftOnly))
+		secondAfter := (dIndex < len(diff)-2 && (diff[dIndex+2].Delta == RightOnly || diff[dIndex+2].Delta == LeftOnly))
+		thirdAfter := (dIndex < len(diff)-3 && (diff[dIndex+3].Delta == RightOnly || diff[dIndex+3].Delta == LeftOnly))
+
+		if !trim || (d.Delta == RightOnly || d.Delta == LeftOnly) || firstBefore || secondBefore || thirdBefore || firstAfter || secondAfter || thirdAfter {
+			line := []interface{}{num, d.Delta, d.Payload}
+			withLines = append(withLines, line)
+		}
 	}
 
 	return withLines
@@ -123,23 +162,27 @@ func Diff(seq1, seq2 []string) ([][]interface{}) {
 // "line-num". The cells that contain deleted elements are decorated
 // with "deleted" and the cells that contain added elements are
 // decorated with "added".
-func HTMLDiff(header string, seq1, seq2 []string) string {
+func HTMLDiff(header string, seq1, seq2 []string, trim bool) string {
 	buf := bytes.NewBufferString("")
 	fmt.Fprintf(buf, `<table class="diff-table"><tr class="table-header"><td><i class="fa fa-chevron-down collapse-icon"></i></td><td colspan="3">%s</td></tr>`, header)
-	
-	difference := Diff(seq1, seq2)
+
+	difference := Diff(seq1, seq2, trim)
 	// lenDiff := len(difference)
-	var l, r int
 	dmp := diffmatchpatch.New()
-	var wDiffs []diffmatchpatch.Diff 
+	var wDiffs []diffmatchpatch.Diff
 	for index, d := range difference {
+		if index != 0 && difference[index][0].([]int)[0] != difference[index-1][0].([]int)[0] && difference[index][0].([]int)[0]-1 != difference[index-1][0].([]int)[0] {
+			fmt.Fprintf(buf, `<tr class="new-part"><td colspan="2">...</td><td>...</td></tr>`)
+		}
+		if index == 0 && difference[index][0].([]int)[0] != 1 {
+			fmt.Fprintf(buf, `<tr class="new-part"><td colspan="2">...</td><td>...</td></tr>`)
+		}
 		fmt.Fprintf(buf, `<tr>`)
-		num := d[0]
+		num := d[0].([]int)
 		if d[1] == LeftOnly {
-			l++
-			if len(difference) != index+1 && difference[index + 1][1] == RightOnly && l == r + 1 {
+			if len(difference) != index+1 && difference[index+1][1] == RightOnly && difference[index][0].([]int)[0] == difference[index+1][0].([]int)[1] {
 				var content string
-				wDiffs = dmp.DiffMain(d[2].(string), difference[index + 1][2].(string), false)
+				wDiffs = dmp.DiffMain(d[2].(string), difference[index+1][2].(string), false)
 				for _, w := range wDiffs {
 
 					if w.Type == -1 {
@@ -149,13 +192,12 @@ func HTMLDiff(header string, seq1, seq2 []string) string {
 					}
 				}
 
-				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num, d[1].(DeltaType).String(), content)
+				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], d[1].(DeltaType).String(), content)
 			} else {
-				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num, d[1].(DeltaType).String(), d[2])
+				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], d[1].(DeltaType).String(), d[2])
 			}
 		} else if d[1] == RightOnly {
-			r++
-			if index != 0 && difference[index - 1][1] == LeftOnly && r == l {
+			if index != 0 && difference[index-1][1] == LeftOnly && difference[index][0].([]int)[1] == difference[index-1][0].([]int)[0] {
 				var content string
 				for _, w := range wDiffs {
 					if w.Type == 1 {
@@ -164,16 +206,17 @@ func HTMLDiff(header string, seq1, seq2 []string) string {
 						content += w.Text
 					}
 				}
-				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num, d[1].(DeltaType).String(), content)
+				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[1], d[1].(DeltaType).String(), content)
 			} else {
-				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num, d[1].(DeltaType).String(), d[2])
+				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[1], d[1].(DeltaType).String(), d[2])
 			}
 		} else {
-			l++ 
-			r++
-			fmt.Fprintf(buf, `<td class="line-num line-num-normal">%d</td><td class="line-num line-num-normal">%d</td><td class="code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, l, r, d[1].(DeltaType).String(), d[2])
+			fmt.Fprintf(buf, `<td class="line-num line-num-normal">%d</td><td class="line-num line-num-normal">%d</td><td class="code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], num[1], d[1].(DeltaType).String(), d[2])
 		}
 		buf.WriteString("</tr>\n")
+	}
+	if len(difference) != 0 && difference[len(difference)-1][0].([]int)[0] != len(seq1) {
+		fmt.Fprintf(buf, `<tr class="new-part"><td colspan="2">...</td><td>...</td></tr>`)
 	}
 	buf.WriteString("</table>")
 	return buf.String()

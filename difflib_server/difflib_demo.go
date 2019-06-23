@@ -300,7 +300,7 @@ func main() {
 }
 
 func Hello(w http.ResponseWriter, r *http.Request) {
-	var diff string
+	var htmlDiff string
 	if r.Method == http.MethodPost {
 		if err := r.ParseForm(); err != nil {
 			log.Print(err)
@@ -308,13 +308,14 @@ func Hello(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		trim, _ := strconv.ParseBool(r.PostForm["trim"][0])
-		diff = difflib.HTMLDiff("Difference", getResponseAsSlice(r.PostForm["first"][0]), getResponseAsSlice(r.PostForm["second"][0]), trim)
+    trim, _ := strconv.ParseBool(r.PostForm["trim"][0])
+	  diff := difflib.Diff(getResponseAsSlice(r.PostForm["first"][0]), getResponseAsSlice(r.PostForm["second"][0]), trim)
+		htmlDiff = difflib.HTMLDiff(diff, "Difference")
 	}
 
 	tmpl, _ := template.New("diffTemplate").Parse(templateString)
 	err := tmpl.Execute(w, map[string]interface{}{
-		"Diff": template.HTML(diff),
+		"Diff": template.HTML(htmlDiff),
 	})
 	if err != nil {
 		log.Print(err)

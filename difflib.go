@@ -162,12 +162,14 @@ func Diff(seq1, seq2 []string, trim bool) [][]interface{} {
 // "line-num". The cells that contain deleted elements are decorated
 // with "deleted" and the cells that contain added elements are
 // decorated with "added".
-func HTMLDiff(header string, seq1, seq2 []string, trim bool) string {
+func HTMLDiff(difference [][]interface{}, header string) string {
+	if header == "" {
+		header = "Difference"
+	}
+
 	buf := bytes.NewBufferString("")
 	fmt.Fprintf(buf, `<table class="diff-table"><tr class="table-header"><td><i class="fa fa-chevron-down collapse-icon"></i></td><td colspan="3">%s</td></tr>`, header)
 
-	difference := Diff(seq1, seq2, trim)
-	// lenDiff := len(difference)
 	dmp := diffmatchpatch.New()
 	var wDiffs []diffmatchpatch.Diff
 	for index, d := range difference {
@@ -214,9 +216,6 @@ func HTMLDiff(header string, seq1, seq2 []string, trim bool) string {
 			fmt.Fprintf(buf, `<td class="line-num line-num-normal">%d</td><td class="line-num line-num-normal">%d</td><td class="code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], num[1], d[1].(DeltaType).String(), d[2])
 		}
 		buf.WriteString("</tr>\n")
-	}
-	if len(difference) != 0 && difference[len(difference)-1][0].([]int)[0] != len(seq1) {
-		fmt.Fprintf(buf, `<tr class="new-part"><td colspan="2">...</td><td>...</td></tr>`)
 	}
 	buf.WriteString("</table>")
 	return buf.String()
@@ -285,4 +284,11 @@ func compute(seq1, seq2 []string) (diff []DiffRecord) {
 		}
 	}
 	return
+}
+
+func min(a, b int) int {
+    if a < b {
+        return a
+    }
+    return b
 }

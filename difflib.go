@@ -58,6 +58,12 @@ type DiffRecord struct {
 	Delta   DeltaType
 }
 
+type Line struct {
+	Number  []int
+	Delta   string
+	Payload string
+}
+
 // String returns a string representation of d. The string is a
 // concatenation of the delta type and the payload.
 func (d DiffRecord) String() string {
@@ -65,7 +71,7 @@ func (d DiffRecord) String() string {
 }
 
 // Diff returns the result of diffing the seq1 and seq2.
-func Diff(seq1, seq2 []string, trim bool) [][]interface{} {
+func Diff(seq1, seq2 []string, trim bool) (withLines []Line) {
 	// Trims any common elements at the heads and tails of the
 	// sequences before running the diff algorithm. This is an
 	// optimization.
@@ -113,8 +119,6 @@ func Diff(seq1, seq2 []string, trim bool) [][]interface{} {
 
 	var l, r int
 
-	var withLines [][]interface{}
-
 	if trim {
 		l, r = startedAt, startedAt
 	}
@@ -142,7 +146,7 @@ func Diff(seq1, seq2 []string, trim bool) [][]interface{} {
 		thirdAfter := (dIndex < len(diff)-3 && (diff[dIndex+3].Delta == RightOnly || diff[dIndex+3].Delta == LeftOnly))
 
 		if !trim || (d.Delta == RightOnly || d.Delta == LeftOnly) || firstBefore || secondBefore || thirdBefore || firstAfter || secondAfter || thirdAfter {
-			line := []interface{}{num, d.Delta, d.Payload}
+			line := Line{num, d.Delta.String(), d.Payload}
 			withLines = append(withLines, line)
 		}
 	}
@@ -162,7 +166,7 @@ func Diff(seq1, seq2 []string, trim bool) [][]interface{} {
 // "line-num". The cells that contain deleted elements are decorated
 // with "deleted" and the cells that contain added elements are
 // decorated with "added".
-func HTMLDiff(difference [][]interface{}, header string) string {
+func HTMLDiff(difference []Line, header string) string {
 	if header == "" {
 		header = "Difference"
 	}
@@ -173,18 +177,18 @@ func HTMLDiff(difference [][]interface{}, header string) string {
 	dmp := diffmatchpatch.New()
 	var wDiffs []diffmatchpatch.Diff
 	for index, d := range difference {
-		if index != 0 && difference[index][0].([]int)[0] != difference[index-1][0].([]int)[0] && difference[index][0].([]int)[0]-1 != difference[index-1][0].([]int)[0] {
+		if index != 0 && difference[index].Number[0] != difference[index-1].Number[0] && difference[index].Number[0]-1 != difference[index-1].Number[0] {
 			fmt.Fprintf(buf, `<tr class="new-part"><td colspan="2">...</td><td>...</td></tr>`)
 		}
-		if index == 0 && difference[index][0].([]int)[0] != 1 {
+		if index == 0 && difference[index].Number[0] != 1 {
 			fmt.Fprintf(buf, `<tr class="new-part"><td colspan="2">...</td><td>...</td></tr>`)
 		}
 		fmt.Fprintf(buf, `<tr>`)
-		num := d[0].([]int)
-		if d[1] == LeftOnly {
-			if len(difference) != index+1 && difference[index+1][1] == RightOnly && difference[index][0].([]int)[0] == difference[index+1][0].([]int)[1] {
+		num := d.Number
+		if d.Delta == "-" {
+			if len(difference) != index+1 && difference[index+1].Delta == "+" && difference[index].Number[0] == difference[index+1].Number[1] {
 				var content string
-				wDiffs = dmp.DiffMain(d[2].(string), difference[index+1][2].(string), false)
+				wDiffs = dmp.DiffMain(d.Payload, difference[index+1].Payload, false)
 				for _, w := range wDiffs {
 
 					if w.Type == -1 {
@@ -194,12 +198,12 @@ func HTMLDiff(difference [][]interface{}, header string) string {
 					}
 				}
 
-				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], d[1].(DeltaType).String(), content)
+				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], d.Delta, content)
 			} else {
-				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], d[1].(DeltaType).String(), d[2])
+				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], d.Delta, d.Payload)
 			}
-		} else if d[1] == RightOnly {
-			if index != 0 && difference[index-1][1] == LeftOnly && difference[index][0].([]int)[1] == difference[index-1][0].([]int)[0] {
+		} else if d.Delta == "+" {
+			if index != 0 && difference[index-1].Delta == "-" && difference[index].Number[1] == difference[index-1].Number[0] {
 				var content string
 				for _, w := range wDiffs {
 					if w.Type == 1 {
@@ -208,12 +212,12 @@ func HTMLDiff(difference [][]interface{}, header string) string {
 						content += w.Text
 					}
 				}
-				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[1], d[1].(DeltaType).String(), content)
+				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[1], d.Delta, content)
 			} else {
-				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[1], d[1].(DeltaType).String(), d[2])
+				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[1], num[0], d.Delta, d.Payload)
 			}
 		} else {
-			fmt.Fprintf(buf, `<td class="line-num line-num-normal">%d</td><td class="line-num line-num-normal">%d</td><td class="code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], num[1], d[1].(DeltaType).String(), d[2])
+			fmt.Fprintf(buf, `<td class="line-num line-num-normal">%d</td><td class="line-num line-num-normal">%d</td><td class="code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], num[1], d.Delta, d.Payload)
 		}
 		buf.WriteString("</tr>\n")
 	}

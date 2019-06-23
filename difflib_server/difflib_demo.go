@@ -147,6 +147,10 @@ var templateString = `
   .line-num-added+.code>pre>code:empty {
     padding: 10px;
   }
+  
+  .line-num-deleted+.code>pre>code:empty {
+    padding: 10px;
+  }
 
   .fa-copy {
     position: relative;

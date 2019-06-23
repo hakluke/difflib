@@ -193,13 +193,13 @@ func HTMLDiff(difference []Line, header string) string {
 				for _, w := range wDiffs {
 
 					if w.Type == -1 {
-						content += "<span class=\"deleted-text\">" + w.Text + "</span>"
+						content += "<span class=\"deleted-text\">" + html.EscapeString(w.Text) + "</span>"
 					} else if w.Type != 1 {
-						content += w.Text
+						content += html.EscapeString(w.Text)
 					}
 				}
 
-				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], d.Delta, html.EscapeString(content))
+				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], d.Delta, content)
 			} else {
 				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], d.Delta, html.EscapeString(d.Payload))
 			}
@@ -208,12 +208,12 @@ func HTMLDiff(difference []Line, header string) string {
 				var content string
 				for _, w := range wDiffs {
 					if w.Type == 1 {
-						content += "<span class=\"added-text\">" + w.Text + "</span>"
+						content += "<span class=\"added-text\">" + html.EscapeString(w.Text) + "</span>"
 					} else if w.Type != -1 {
-						content += w.Text
+						content += html.EscapeString(w.Text)
 					}
 				}
-				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[1], d.Delta, html.EscapeString(content))
+				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[1], d.Delta, content)
 			} else {
 				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[1], d.Delta, html.EscapeString(d.Payload))
 			}

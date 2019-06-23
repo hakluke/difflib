@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"html"
 
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
@@ -172,7 +173,7 @@ func HTMLDiff(difference []Line, header string) string {
 	}
 
 	buf := bytes.NewBufferString("")
-	fmt.Fprintf(buf, `<table class="diff-table"><tr class="table-header"><td><i class="fa fa-chevron-down collapse-icon"></i></td><td colspan="3">%s</td></tr>`, header)
+	fmt.Fprintf(buf, `<table class="diff-table"><tr class="table-header"><td><i class="fa fa-chevron-down collapse-icon"></i></td><td colspan="3">%s</td></tr>`, html.EscapeString(header))
 
 	dmp := diffmatchpatch.New()
 	var wDiffs []diffmatchpatch.Diff
@@ -198,9 +199,9 @@ func HTMLDiff(difference []Line, header string) string {
 					}
 				}
 
-				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], d.Delta, content)
+				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], d.Delta, html.EscapeString(content))
 			} else {
-				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], d.Delta, d.Payload)
+				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], d.Delta, html.EscapeString(d.Payload))
 			}
 		} else if d.Delta == "+" {
 			if index != 0 && difference[index-1].Delta == "-" && difference[index].Number[1] == difference[index-1].Number[0] {
@@ -212,12 +213,12 @@ func HTMLDiff(difference []Line, header string) string {
 						content += w.Text
 					}
 				}
-				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[1], d.Delta, content)
+				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[1], d.Delta, html.EscapeString(content))
 			} else {
-				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[1], num[0], d.Delta, d.Payload)
+				fmt.Fprintf(buf, `<td class="line-num line-num-added"></td><td class="line-num line-num-added">%d</td><td class="added code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[1], d.Delta, html.EscapeString(d.Payload))
 			}
 		} else {
-			fmt.Fprintf(buf, `<td class="line-num line-num-normal">%d</td><td class="line-num line-num-normal">%d</td><td class="code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], num[1], d.Delta, d.Payload)
+			fmt.Fprintf(buf, `<td class="line-num line-num-normal">%d</td><td class="line-num line-num-normal">%d</td><td class="code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], num[1], d.Delta, html.EscapeString(d.Payload))
 		}
 		buf.WriteString("</tr>\n")
 	}

@@ -181,7 +181,7 @@ func HTMLDiff(difference []Line, header string) string {
 		if index != 0 && difference[index].Number[0] != difference[index-1].Number[0] && difference[index].Number[0]-1 != difference[index-1].Number[0] {
 			fmt.Fprintf(buf, `<tr class="new-part"><td colspan="2">...</td><td>...</td></tr>`)
 		}
-		if index == 0 && difference[index].Number[0] != 1 {
+		if index == 0 && ((difference[index].Number[0] != 1 && difference[index].Number[0] != 0) || (difference[index].Number[1] != 1 && difference[index].Number[0] != 0)) {
 			fmt.Fprintf(buf, `<tr class="new-part"><td colspan="2">...</td><td>...</td></tr>`)
 		}
 		fmt.Fprintf(buf, `<tr>`)

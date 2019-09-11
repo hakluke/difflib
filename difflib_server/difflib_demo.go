@@ -312,8 +312,8 @@ func Hello(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-    trim, _ := strconv.ParseBool(r.PostForm["trim"][0])
-	  diff := difflib.Diff(getResponseAsSlice(r.PostForm["first"][0]), getResponseAsSlice(r.PostForm["second"][0]), trim)
+		trim, _ := strconv.ParseBool(r.PostForm["trim"][0])
+		diff := difflib.Diff(getResponseAsSlice(r.PostForm["first"][0]), getResponseAsSlice(r.PostForm["second"][0]), trim)
 		htmlDiff = difflib.HTMLDiff(diff, "Difference")
 	}
 

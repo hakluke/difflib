@@ -19,8 +19,8 @@ package difflib
 import (
 	"bytes"
 	"fmt"
-	"math"
 	"html"
+	"math"
 
 	"github.com/sergi/go-diff/diffmatchpatch"
 )
@@ -292,8 +292,8 @@ func compute(seq1, seq2 []string) (diff []DiffRecord) {
 }
 
 func min(a, b int) int {
-    if a < b {
-        return a
-    }
-    return b
+	if a < b {
+		return a
+	}
+	return b
 }

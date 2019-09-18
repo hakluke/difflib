@@ -4,14 +4,20 @@ package main
 
 import (
 	"bufio"
+	"crypto/md5"
 	"fmt"
 	"github.com/003random/difflib"
 	"github.com/gorilla/mux"
-	"html"
+	"github.com/yosssi/gohtml"
 	"html/template"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
+  "strings"
+  
+  jsbeautifier "github.com/003random/jsbeautifier-go/jsbeautifier"
 )
 
 var templateString = `
@@ -23,7 +29,7 @@ var templateString = `
   <title>File diff</title>
   <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.6.3/css/all.css"
     integrity="sha384-UHRtZLI+pbxtHCWp1t77Bi1L4ZtiqrqD80Kn4Z8NTSRyMA2Fd33n5dQ8lWUE00s/" crossorigin="anonymous">
-  <link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.15.8/styles/default.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.15.8/styles/default.min.css">
   <style type="text/css">
   .hljs {
     display: inline;
@@ -33,9 +39,9 @@ var templateString = `
   }
 
   .diff-table {
+    max-height: 80vh;
     display: block;
     overflow-x: auto;
-    margin: 5vw;
     font-family: Console, Liberation Mono, DejaVu Sans Mono, Bitstream Vera Sans Mono, Courier New;
     background-color: white;
     border-collapse: collapse;
@@ -44,6 +50,8 @@ var templateString = `
     border-radius: 3px;
     margin-bottom: 16px;
     margin-top: 16px;
+    -webkit-box-shadow: 0 0 3px gray;
+    box-shadow: 0 0 3px gray;
   }
 
   .diff-table>tbody>tr {
@@ -118,12 +126,6 @@ var templateString = `
     left: -10px;
   }
 
-  .collapse-icon {
-    cursor: pointer;
-    padding: 10px;
-    margin-left: 15px;
-  }
-
   .deleted-text {
     color: black !important;
     padding: 1px;
@@ -180,118 +182,310 @@ var templateString = `
     color: gray;
     opacity: 0.6;
   }
-</style>
+
+  .excluded > .code > pre > code {
+    background-color: #ffebd9 !important;
+  }
+
+  .excluded > .code, .excluded > td {
+    background-color: rgba(255, 119, 0, 0.15) !important;
+  }
+
+  #diff-table-bottom {
+    background-color: white;
+  }
+
+  #diff-table-bottom > td {
+    box-shadow: 0 -5px 5px -5px black; 
+    position: sticky; 
+    bottom: 0;
+  }
+
+  #diff-table-bottom > td > div {
+    max-width: 33vw; 
+    text-align: center; 
+    width: 33%; 
+    line-height: 26px; 
+    float: left;
+  }
+
+  .added-color {
+    background-color: #e6ffed !important;
+  }
+
+  .deleted-color {
+    background-color: #ffeef0 !important;
+  }
+
+  .excluded-color {
+    background-color: #ffebd9 !important;
+    width: 34% !important;
+    max-width: 34vw !important;
+  }
+  
+  #diff-search {
+    margin-left: 10px;
+    border: 1px solid white;
+    width: 100%;
+    height: 100%;
+  }
+
+  #diff-text {
+    margin-top: 3px;
+    float: left;
+/*  font-weight: bold;  */
+    font-size: 1.1em;
+  }
+
+  .diff-search-icon {
+    cursor: pointer;
+    padding: 10px;
+    margin-left: 15px;
+  }
+
+  #table-search {
+    display: none;
+  }
+
+  #table-search > td {
+    border-bottom: 2px solid lightgray;
+    height: 35px;
+  }
+
+  .re-match {
+    border: 2px solid rgb(255, 0, 0, 0.4);
+  }
+
+  .search-highlight {
+    background-color: rgb(255, 0, 0, 0.4);
+  }
+
+  #diff-search-results {
+    display: none;
+    background-color: #f9fbff;
+  }
+
+  .results-row {
+    height: 20px;
+  }
+
+  .results-num-1, .results-num-2 {
+    color: rgba(27, 31, 35, 0.3);
+  }
+  </style>
 </head>
-<form action="#" method="POST">
-    <input type="text" name="first" id="first" value="https://varanid.io/static/test.txt">
-    <input type="text" name="second" id="second" value="https://varanid.io/static/test1.txt">
-    trim:<input type="hidden" name="trim" value="0"><input type="checkbox" onclick="this.previousSibling.value=1-this.previousSibling.value">
+
+<form action="/" method="POST">
+    <input type="text" name="first" id="first" value="https://gist.githubusercontent.com/003random/550d91fa4443ea8b3a9a6ab8cfb55128/raw/2f585a3f00d2c1cad18d31e646206f4b30a6176d/test">
+    <input type="text" name="second" id="second" value="https://test.poc-server.com">
+    trim:<input type="hidden" name="trim" value="1"><input type="checkbox" onclick="this.previousSibling.value=1-this.previousSibling.value" checked="checked">
+    filter:<input type="hidden" name="filter" value="1"><input type="checkbox" onclick="this.previousSibling.value=1-this.previousSibling.value" checked="checked">
+    beautify:<input type="hidden" name="beautify" value="1"><input type="checkbox" onclick="this.previousSibling.value=1-this.previousSibling.value" checked="checked">
     <button type="submit">diff</button>
 </form>
-
-{{.Diff}}
+{{if .AfterPost}}
+  {{if .IsDifferent}}
+    {{.Diff}}
+  {{else}}
+    Hashes were the same. No difference found.
+  {{end}}
+{{end}}
 
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.15.8/highlight.min.js"></script>
 <script>
-  hljs.initHighlightingOnLoad();
-  $(document).ready(function () {
+hljs.initHighlightingOnLoad();
+$(document).ready(function () {
+  $("#diff-search").on("input", function() {
+    $("#diff-search-results-table").html("");
+    var value = $("#diff-search").val();
+    if (value === "" || value.length < 3) {
+      $(".re-match").removeClass("re-match");
+      return
+    }
 
-    $(".diff-table > tbody > tr:not(.table-header):not(.new-part)").mouseenter(function () {
-      $(this).css({
-        "background": "#f9fbff",
-        "background-color": "#f9fbff"
-      });
-      $(this).find(".hljs").css({
-        "background": "#f9fbff",
-        "background-color": "#f9fbff"
-      });
-
-      $(this).find(".code").prepend("<i class=\"fa fa-copy\"></i>");
-      $(".fa-copy").on("click", function () {
-        copyStringToClipboard($(this).siblings("pre").children("code").text());
-      });
-    });
-
-    $(".diff-table > tbody > tr:not(.table-header):not(.new-part)").mouseleave(function () {
-      $(this).css({
-        "background": "white",
-        "background-color": "white"
-      });
-      $(this).find(".hljs").css({
-        "background": "white",
-        "background-color": "white"
-      });
-
-      $(this).find(".code").children(".fa-copy").remove();
-    });
-
-    $(".collapse-icon").on("click", function () {
-      $(this).toggleClass("fa-chevron-down").toggleClass("fa-chevron-right");
-      $(".diff-table > tbody > tr:not(.table-header)").toggle();
-      $(".table-header").children().eq(1).css("width", "100%");
-    });
-
-    var switched = false;
-    $(".line-num").on("click", function () {
-      if (!switched) {
-        $(".code").each(function () {
-          var html = "<td class='" + $(this).attr("class") + "'>" + $(this).html(); + "</td>"
-          console.log(html);
-          if ($(this).siblings().first().hasClass("line-num-added")) {
-            html = "<td></td>";
-            $(this).siblings().first().removeClass("line-num-added")
-          }
-
-          $(html).insertAfter($(this).siblings(".line-num").first());
-          if ($(this).siblings().first().hasClass("line-num-deleted")) {
-            $(this).siblings(".line-num-deleted").eq(1).removeClass("line-num-deleted");
-            $(this).siblings(".code").addClass("deleted");
-            $(this).html("");
-            $(this).removeClass("deleted");
-          }
-        });
-        $(".code").css("width", "50%");
-        $(".code").css("max-width", "50%");
-        switched = true;
-      }
-    });
-    $(".new-part").each(function() {
-        if (!$(this).prev().hasClass("table-header")) {
-            $(this).prev().css({
-                "transform": "scale(1)",
-                "box-shadow": "0 5px 5px -5px #333"
-            });
+    $(".diff-table > tbody > tr:not(.table-header):not(.new-part):not(#table-search):not(#diff-search-results)").each(function() {
+      var text = $(this).children(".code").text().trim();
+      if ($(this).children(".code").hasClass("added") || $(this).children(".code").hasClass("deleted")) {
+        if (text[0] == '+' || text[0] == '-') {
+          text = text.substr(1).trim();
         }
-        $(this).next().css({
-            "transform": "scale(1)",
-            "box-shadow": "0 -5px 5px -5px #333"
-        });
+      }
+
+      var match = false;
+      var regex = false;
+      var include = false;
+      var re = new RegExp(value, "g")
+
+      if (text.includes(value)) {
+        match = true;
+        include = true;
+      } else if (re.test(text)) {
+        match = true;
+        regex = true;
+      }
+
+      if (match) {
+        $(this).children("td").eq(2).addClass("re-match");
+        var result = value;
+        re.exec(text);
+        if (regex) {
+          while (match = re.exec(text)) {
+            addSearchResult($(this).children("td").eq(0).text(), $(this).children("td").eq(1).text(), getValuePlusContext(match.index, match[0].length, text));
+          }
+        } else if (include) {
+          var indexes = getIndicesOf(value, text);
+          for (i = 0; i < indexes.length; i++) {
+            addSearchResult($(this).children("td").eq(0).text(), $(this).children("td").eq(1).text(), getValuePlusContext(indexes[i], value.length, text));
+          }
+        }
+      } else {
+        $(this).children("td").eq(2).removeClass("re-match");
+      }
     });
   });
 
-  function copyStringToClipboard(str) {
-    // Create new element
-    var el = document.createElement('textarea');
-    // Set value (string to be copied)
-    el.value = str;
-    // Set non-editable to avoid focus and move outside of view
-    el.setAttribute('readonly', '');
-    el.style = {
-      position: 'absolute',
-      left: '-9999px'
-    };
-    document.body.appendChild(el);
-    // Select text inside element
-    el.select();
-    // Copy text to clipboard
-    document.execCommand('copy');
-    // Remove temporary element
-    document.body.removeChild(el);
+  function getValuePlusContext(index, len, text) {
+    var contextMargin = 20;
+    var word = text.substr(index, len);
+    var before = "";
+
+    for (i = 0; i < contextMargin; i++) {
+      if (index > i) {
+        before = text.substr(index-(i+1), (i+1));
+      }
+    }
+    after = "";
+    for (i = 1; i < contextMargin+1; i++) {
+      if (index + len < text.length) {
+        after = text.substr(index + len, i)
+      }
+    }
+
+    return (escapeHtml(before) + "<span class='search-highlight'>" + escapeHtml(word) + "</span>" + escapeHtml(after)).trim()
   }
+
+  function addSearchResult(line1, line2, result) {
+    $("#diff-search-results-table").append("<tr class='results-row'><td class='line-num line-num-normal'>"+line1+"</td><td class='line-num line-num-normal'>"+line2+"</td><td class='results-text'>" + result + "</td></tr>");      
+  }
+
+  function getIndicesOf(searchStr, str) {
+    var searchStrLen = searchStr.length;
+    if (searchStrLen == 0) {
+      return [];
+    }
+    var startIndex = 0, index, indices = [];
+    while ((index = str.indexOf(searchStr, startIndex)) > -1) {
+      indices.push(index);
+      startIndex = index + searchStrLen;
+    }
+    return indices;
+  }
+
+  $(".diff-search-icon").on("click", function() {
+    $("#table-search, #diff-search-results").fadeToggle();
+  });
+
+  $(".diff-table > tbody > tr:not(.table-header):not(.new-part):not(#table-search):not(#diff-search-results)").mouseenter(function () {
+    $(this).css({
+      "background": "#f9fbff",
+      "background-color": "#f9fbff"
+    });
+    $(this).find(".hljs").css({
+      "background": "#f9fbff",
+      "background-color": "#f9fbff"
+    });
+
+    $(this).find(".code").prepend("<i class=\"fa fa-copy\"></i>");
+    $(".fa-copy").on("click", function () {
+      copyStringToClipboard($(this).siblings("pre").children("code").text());
+    });
+  });
+
+  $(".diff-table > tbody > tr:not(.table-header):not(.new-part):not(#table-search):not(#diff-search-results)").mouseleave(function () {
+    $(this).css({
+      "background": "white",
+      "background-color": "white"
+    });
+    var hljs = $(this).find(".hljs")
+    if (!hljs.parent().parent().hasClass("excluded")) {
+      hljs.css({
+        "background": "white",
+        "background-color": "white"
+      });
+    }
+
+    $(this).find(".code").children(".fa-copy").remove();
+  });
+
+  var switched = false;
+  $(".line-num").on("click", function () {
+    if (!switched) {
+      $(".code").each(function () {
+        var html = "<td class='" + $(this).attr("class") + "'>" + $(this).html(); + "</td>"
+        if ($(this).siblings().first().hasClass("line-num-added")) {
+          html = "<td></td>";
+          $(this).siblings().first().removeClass("line-num-added")
+        }
+
+        $(html).insertAfter($(this).siblings(".line-num").first());
+        if ($(this).siblings().first().hasClass("line-num-deleted")) {
+          $(this).siblings(".line-num-deleted").eq(1).removeClass("line-num-deleted");
+          $(this).siblings(".code").addClass("deleted");
+          $(this).html("");
+          $(this).removeClass("deleted");
+        }
+      });
+      $(".code").css("width", "50%");
+      $(".code").css("max-width", "50%");
+      switched = true;
+    }
+  });
+  $(".new-part").each(function() {
+      if (!$(this).prev().hasClass("table-header")) {
+          $(this).prev().css({
+              "transform": "scale(1)",
+              "box-shadow": "0 5px 5px -5px #333"
+          });
+      }
+      $(this).next().css({
+          "transform": "scale(1)",
+          "box-shadow": "0 -5px 5px -5px #333"
+      });
+  });
+});
+
+var entityMap = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+  '/': '&#x2F;',
+  '=': '&#x3D;'
+};
+
+function escapeHtml(string) {
+  return String(string).replace(/[&<>"'=\/]/g, function (s) {
+      return entityMap[s];
+  });
+}
+
+function copyStringToClipboard(str) {
+  var el = document.createElement('textarea');
+  el.value = str;
+  el.setAttribute('readonly', '');
+  el.style = {
+    position: 'absolute',
+    left: '-9999px'
+  };
+  document.body.appendChild(el);
+  el.select();
+  document.execCommand('copy');
+  document.body.removeChild(el);
+}
 </script>
 </body>
-
 </html>
 `
 
@@ -304,7 +498,8 @@ func main() {
 }
 
 func Hello(w http.ResponseWriter, r *http.Request) {
-	var htmlDiff string
+  var htmlDiff string
+  var isDifferent bool
 	if r.Method == http.MethodPost {
 		if err := r.ParseForm(); err != nil {
 			log.Print(err)
@@ -313,37 +508,94 @@ func Hello(w http.ResponseWriter, r *http.Request) {
 		}
 
 		trim, _ := strconv.ParseBool(r.PostForm["trim"][0])
-		diff := difflib.Diff(getResponseAsSlice(r.PostForm["first"][0]), getResponseAsSlice(r.PostForm["second"][0]), trim)
-		htmlDiff = difflib.HTMLDiff(diff, "Difference")
+		filter, _ := strconv.ParseBool(r.PostForm["filter"][0])
+		beautify, _ := strconv.ParseBool(r.PostForm["beautify"][0])
+
+		old, isJS := getResponse(r.PostForm["first"][0])
+		new, isJS := getResponse(r.PostForm["second"][0])
+
+		isDifferent = fmt.Sprintf("%x", md5.Sum([]byte(old))) != fmt.Sprintf("%x", md5.Sum([]byte(new)))
+
+		if isDifferent {
+      diff := difflib.Diff(getResponseAsSlice(old, beautify, isJS), getResponseAsSlice(new, beautify, isJS), trim)
+			if filter {
+				again, isJS := getResponse(r.PostForm["second"][0])
+				dynamicDiff := difflib.Diff(getResponseAsSlice(new, beautify, isJS), getResponseAsSlice(again, beautify, isJS), trim)
+				dynamicLineNums := []int{}
+				for _, line := range dynamicDiff {
+					if line.Delta != difflib.Common.String() {
+						dynamicLineNums = append(dynamicLineNums, line.Number[0])
+					}
+        }
+				sort.Ints(dynamicLineNums)
+
+				if len(dynamicLineNums) > 0 {
+					for i, line := range diff {
+						for _, num := range dynamicLineNums {
+							if num > line.Number[0] {
+								break
+							} else if num == line.Number[0] {
+								diff[i].Exclude = true
+								break
+							}
+						}
+					}
+				}
+			}
+			htmlDiff = difflib.HTMLDiff(diff, "Difference")
+    }
 	}
 
 	tmpl, _ := template.New("diffTemplate").Parse(templateString)
 	err := tmpl.Execute(w, map[string]interface{}{
-		"Diff": template.HTML(htmlDiff),
+    "Diff": template.HTML(htmlDiff),
+    "IsDifferent": isDifferent,
+    "AfterPost": r.Method == http.MethodPost,
 	})
 	if err != nil {
 		log.Print(err)
 	}
 }
 
-func getResponseAsSlice(url string) []string {
+func getResponse(url string) (string, bool) {
+  var isJS bool = false
 	fmt.Println(url)
 	var client http.Client
 	resp, err := client.Get(url)
 	if err != nil {
 		log.Print(err)
-		return []string{}
+		return "", false
 	}
-	defer resp.Body.Close()
+  defer resp.Body.Close()
+  if _, ok := resp.Header["Content-Type"]; ok && strings.Contains(resp.Header["Content-Type"][0], "javascript") {
+    isJS = true
+  }
+	d, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Print(err)
+		return "", isJS
+	}
+	return string(d), isJS
+}
 
-	s := bufio.NewScanner(resp.Body)
+func getResponseAsSlice(resp string, beautify, isJS bool) []string {
 	body := []string{}
+  if isJS && beautify {
+    fmt.Println("isjs")
+    options := jsbeautifier.DefaultOptions()
+    resp = jsbeautifier.Beautify(&resp, options)
+  }	else if beautify {
+		resp = gohtml.Format(resp)
+	}
+
+	s := bufio.NewScanner(strings.NewReader(resp))
 	for s.Scan() {
-		body = append(body, html.EscapeString(s.Text()))
+		body = append(body, s.Text())
 	}
 	if err := s.Err(); err != nil {
 		log.Print(err)
 		return []string{}
 	}
+
 	return body
 }

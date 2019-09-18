@@ -63,6 +63,7 @@ type Line struct {
 	Number  []int
 	Delta   string
 	Payload string
+	Exclude bool
 }
 
 // String returns a string representation of d. The string is a
@@ -147,7 +148,7 @@ func Diff(seq1, seq2 []string, trim bool) (withLines []Line) {
 		thirdAfter := (dIndex < len(diff)-3 && (diff[dIndex+3].Delta == RightOnly || diff[dIndex+3].Delta == LeftOnly))
 
 		if !trim || (d.Delta == RightOnly || d.Delta == LeftOnly) || firstBefore || secondBefore || thirdBefore || firstAfter || secondAfter || thirdAfter {
-			line := Line{num, d.Delta.String(), d.Payload}
+			line := Line{num, d.Delta.String(), d.Payload, false}
 			withLines = append(withLines, line)
 		}
 	}
@@ -173,7 +174,10 @@ func HTMLDiff(difference []Line, header string) string {
 	}
 
 	buf := bytes.NewBufferString("")
-	fmt.Fprintf(buf, `<table class="diff-table"><tr class="table-header"><td><i class="fa fa-chevron-down collapse-icon"></i></td><td colspan="3">%s</td></tr>`, html.EscapeString(header))
+	fmt.Fprintf(buf, `<table style="max-height: 80vh;" class="diff-table">
+	<tr class="table-header"><td><i class="fa fa-search diff-search-icon"></i></td><td colspan="3"><span id="diff-text">%s</span></td></tr>
+	<tr id="table-search"><td colspan="3"><input type="text" id="diff-search" placeholder="Search String || Regular Expression" /></td></tr>
+	<tr id="diff-search-results"><td colspan="3"><table id="diff-search-results-table"></table></td></tr>`, html.EscapeString(header))
 
 	dmp := diffmatchpatch.New()
 	var wDiffs []diffmatchpatch.Diff
@@ -184,10 +188,19 @@ func HTMLDiff(difference []Line, header string) string {
 		if index == 0 && ((difference[index].Number[0] != 1 && difference[index].Number[0] != 0) || (difference[index].Number[1] != 1 && difference[index].Number[0] != 0)) {
 			fmt.Fprintf(buf, `<tr class="new-part"><td colspan="2">...</td><td>...</td></tr>`)
 		}
-		fmt.Fprintf(buf, `<tr>`)
+		// If the line is excluded from the difference, 'exclude' will be added as class to the html
+		if d.Exclude {
+			fmt.Fprintf(buf, `<tr class="excluded">`)
+		} else {
+			fmt.Fprintf(buf, `<tr>`)
+		}
 		num := d.Number
 		if d.Delta == "-" {
-			if len(difference) != index+1 && difference[index+1].Delta == "+" && difference[index].Number[0] == difference[index+1].Number[1] {
+			diffLen := len(difference)
+			// Highlight word difference only if the current line is deleted and the next line is added, and they both have the same line num. Goes 3 lines deep. E.g. 3 lines deleted, then 3 lines added. So 3 lines modified
+			if (diffLen != index+1 && difference[index+1].Delta == "+" && difference[index].Number[0] == difference[index+1].Number[1]) ||
+			   (diffLen != index+1 && diffLen != index+2 && difference[index+2].Delta == "+" && difference[index].Number[0] == difference[index+2].Number[1]) ||
+			   (diffLen != index+1 && diffLen != index+2 && diffLen != index+3 && difference[index+3].Delta == "+" && difference[index].Number[0] == difference[index+3].Number[1]) {
 				var content string
 				wDiffs = dmp.DiffMain(d.Payload, difference[index+1].Payload, false)
 				for _, w := range wDiffs {
@@ -204,7 +217,9 @@ func HTMLDiff(difference []Line, header string) string {
 				fmt.Fprintf(buf, `<td class="line-num line-num-deleted">%d</td><td class="line-num line-num-deleted"></td><td class="deleted code"><span class="delta-type">%s</span><pre><code>%s</code></pre></td>`, num[0], d.Delta, html.EscapeString(d.Payload))
 			}
 		} else if d.Delta == "+" {
-			if index != 0 && difference[index-1].Delta == "-" && difference[index].Number[1] == difference[index-1].Number[0] {
+			if (index != 0 && difference[index-1].Delta == "-" && difference[index].Number[1] == difference[index-1].Number[0]) ||
+			   (index != 0 && index != 1 && difference[index-2].Delta == "-" && difference[index].Number[1] == difference[index-2].Number[0]) ||
+			   (index != 0 && index != 1 && index != 2 && difference[index-3].Delta == "-" && difference[index].Number[1] == difference[index-3].Number[0]) {
 				var content string
 				for _, w := range wDiffs {
 					if w.Type == 1 {
@@ -222,6 +237,7 @@ func HTMLDiff(difference []Line, header string) string {
 		}
 		buf.WriteString("</tr>\n")
 	}
+	buf.WriteString("<tr style=\"background-color: white\"><td colspan=\"3\" style=\"box-shadow: 0 -5px 5px -5px black; position: sticky; bottom: 0;\"><div style=\"max-width: 33vw; background-color: #e6ffed; text-align: center; width: 33%; line-height: 26px; float: left\"><b>Added</b></div><div style=\"max-width: 33vw; background-color: #ffeef0; text-align: center; width: 33%; line-height: 26px; float: left;\"><b>Deleted</b></div><div style=\"max-width: 34vw; background-color: #ffebd9; text-align: center; width: 34%; line-height: 26px; float: left\"><b>Excluded</b></div></td></tr>")
 	buf.WriteString("</table>")
 	return buf.String()
 }

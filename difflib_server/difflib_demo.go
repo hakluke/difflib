@@ -15,9 +15,9 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
-  "strings"
-  
-  jsbeautifier "github.com/003random/jsbeautifier-go/jsbeautifier"
+	"strings"
+
+	jsbeautifier "github.com/003random/jsbeautifier-go/jsbeautifier"
 )
 
 var templateString = `
@@ -276,7 +276,7 @@ var templateString = `
 </head>
 
 <form action="/" method="POST">
-    <input type="text" name="first" id="first" value="https://gist.githubusercontent.com/003random/550d91fa4443ea8b3a9a6ab8cfb55128/raw/2f585a3f00d2c1cad18d31e646206f4b30a6176d/test">
+    <input type="text" name="first" id="first" value="https://gist.githubusercontent.com/003random/af77d3a3fb591eb4eae238839f02b1dd/raw/771dfa983ef006c3a41262d7399ae4f331d30643/gistfile1.txt">
     <input type="text" name="second" id="second" value="https://test.poc-server.com">
     trim:<input type="hidden" name="trim" value="1"><input type="checkbox" onclick="this.previousSibling.value=1-this.previousSibling.value" checked="checked">
     filter:<input type="hidden" name="filter" value="1"><input type="checkbox" onclick="this.previousSibling.value=1-this.previousSibling.value" checked="checked">
@@ -498,8 +498,8 @@ func main() {
 }
 
 func Hello(w http.ResponseWriter, r *http.Request) {
-  var htmlDiff string
-  var isDifferent bool
+	var htmlDiff string
+	var isDifferent bool
 	if r.Method == http.MethodPost {
 		if err := r.ParseForm(); err != nil {
 			log.Print(err)
@@ -517,7 +517,7 @@ func Hello(w http.ResponseWriter, r *http.Request) {
 		isDifferent = fmt.Sprintf("%x", md5.Sum([]byte(old))) != fmt.Sprintf("%x", md5.Sum([]byte(new)))
 
 		if isDifferent {
-      diff := difflib.Diff(getResponseAsSlice(old, beautify, isJS), getResponseAsSlice(new, beautify, isJS), trim)
+			diff := difflib.Diff(getResponseAsSlice(old, beautify, isJS), getResponseAsSlice(new, beautify, isJS), trim)
 			if filter {
 				again, isJS := getResponse(r.PostForm["second"][0])
 				dynamicDiff := difflib.Diff(getResponseAsSlice(new, beautify, isJS), getResponseAsSlice(again, beautify, isJS), trim)
@@ -526,7 +526,7 @@ func Hello(w http.ResponseWriter, r *http.Request) {
 					if line.Delta != difflib.Common.String() {
 						dynamicLineNums = append(dynamicLineNums, line.Number[0])
 					}
-        }
+				}
 				sort.Ints(dynamicLineNums)
 
 				if len(dynamicLineNums) > 0 {
@@ -543,14 +543,14 @@ func Hello(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			htmlDiff = difflib.HTMLDiff(diff, "Difference")
-    }
+		}
 	}
 
 	tmpl, _ := template.New("diffTemplate").Parse(templateString)
 	err := tmpl.Execute(w, map[string]interface{}{
-    "Diff": template.HTML(htmlDiff),
-    "IsDifferent": isDifferent,
-    "AfterPost": r.Method == http.MethodPost,
+		"Diff":        template.HTML(htmlDiff),
+		"IsDifferent": isDifferent,
+		"AfterPost":   r.Method == http.MethodPost,
 	})
 	if err != nil {
 		log.Print(err)
@@ -558,7 +558,7 @@ func Hello(w http.ResponseWriter, r *http.Request) {
 }
 
 func getResponse(url string) (string, bool) {
-  var isJS bool = false
+	var isJS bool = false
 	fmt.Println(url)
 	var client http.Client
 	resp, err := client.Get(url)
@@ -566,10 +566,10 @@ func getResponse(url string) (string, bool) {
 		log.Print(err)
 		return "", false
 	}
-  defer resp.Body.Close()
-  if _, ok := resp.Header["Content-Type"]; ok && strings.Contains(resp.Header["Content-Type"][0], "javascript") {
-    isJS = true
-  }
+	defer resp.Body.Close()
+	if _, ok := resp.Header["Content-Type"]; ok && strings.Contains(resp.Header["Content-Type"][0], "javascript") {
+		isJS = true
+	}
 	d, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Print(err)
@@ -580,11 +580,11 @@ func getResponse(url string) (string, bool) {
 
 func getResponseAsSlice(resp string, beautify, isJS bool) []string {
 	body := []string{}
-  if isJS && beautify {
-    fmt.Println("isjs")
-    options := jsbeautifier.DefaultOptions()
-    resp = jsbeautifier.Beautify(&resp, options)
-  }	else if beautify {
+	if isJS && beautify {
+		fmt.Println("isjs")
+		options := jsbeautifier.DefaultOptions()
+		resp = jsbeautifier.Beautify(&resp, options)
+	} else if beautify {
 		resp = gohtml.Format(resp)
 	}
 

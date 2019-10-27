@@ -73,7 +73,10 @@ func (d DiffRecord) String() string {
 }
 
 // Diff returns the result of diffing the seq1 and seq2.
-func Diff(seq1, seq2 []string, trim bool) (withLines []Line) {
+func Diff(seq1, seq2 *[]string, trim bool) (*[]Line) {
+	withLinesNew := []Line{}
+	withLines := &withLinesNew
+
 	// Trims any common elements at the heads and tails of the
 	// sequences before running the diff algorithm. This is an
 	// optimization.
@@ -82,40 +85,40 @@ func Diff(seq1, seq2 []string, trim bool) (withLines []Line) {
 	var startedAt int
 	var diff []DiffRecord
 	if !trim {
-		for _, content := range seq1[:start] {
+		for _, content := range (*seq1)[:start] {
 			diff = append(diff, DiffRecord{content, Common})
 		}
 	} else {
 		if start > 0 {
-			diff = append([]DiffRecord{DiffRecord{seq1[start-1 : start][0], Common}}, diff...)
+			diff = append([]DiffRecord{DiffRecord{(*seq1)[start-1 : start][0], Common}}, diff...)
 			startedAt = start - 1
 		}
 		if start > 1 {
-			diff = append([]DiffRecord{DiffRecord{seq1[start-2 : start][0], Common}}, diff...)
+			diff = append([]DiffRecord{DiffRecord{(*seq1)[start-2 : start][0], Common}}, diff...)
 			startedAt = start - 2
 		}
 		if start > 2 {
-			diff = append([]DiffRecord{DiffRecord{seq1[start-3 : start][0], Common}}, diff...)
+			diff = append([]DiffRecord{DiffRecord{(*seq1)[start-3 : start][0], Common}}, diff...)
 			startedAt = start - 3
 		}
 	}
 
-	diffRes := compute(seq1[start:len(seq1)-end], seq2[start:len(seq2)-end])
+	diffRes := compute((*seq1)[start:len(*seq1)-end], (*seq2)[start:len(*seq2)-end])
 	diff = append(diff, diffRes...)
 
 	if !trim {
-		for _, content := range seq1[len(seq1)-end:] {
+		for _, content := range (*seq1)[len(*seq1)-end:] {
 			diff = append(diff, DiffRecord{content, Common})
 		}
 	} else {
 		if end > 0 {
-			diff = append(diff, DiffRecord{seq1[len(seq1)-end : len(seq1)-end+1][0], Common})
+			diff = append(diff, DiffRecord{(*seq1)[len(*seq1)-end : len(*seq1)-end+1][0], Common})
 		}
 		if end > 1 {
-			diff = append(diff, DiffRecord{seq1[len(seq1)-end : len(seq1)-end+2][1], Common})
+			diff = append(diff, DiffRecord{(*seq1)[len(*seq1)-end : len(*seq1)-end+2][1], Common})
 		}
 		if end > 2 {
-			diff = append(diff, DiffRecord{seq1[len(seq1)-end : len(seq1)-end+3][2], Common})
+			diff = append(diff, DiffRecord{(*seq1)[len(*seq1)-end : len(*seq1)-end+3][2], Common})
 		}
 	}
 
@@ -149,7 +152,7 @@ func Diff(seq1, seq2 []string, trim bool) (withLines []Line) {
 
 		if !trim || (d.Delta == RightOnly || d.Delta == LeftOnly) || firstBefore || secondBefore || thirdBefore || firstAfter || secondAfter || thirdAfter {
 			line := Line{num, d.Delta.String(), d.Payload, false}
-			withLines = append(withLines, line)
+			*withLines = append(*withLines, line)
 		}
 	}
 
@@ -190,9 +193,9 @@ func HTMLDiff(difference []Line, header string) string {
 		}
 		// If the line is excluded from the difference, 'exclude' will be added as class to the html
 		if d.Exclude {
-			fmt.Fprintf(buf, `<tr class="excluded">`)
+			fmt.Fprintf(buf, `<tr class="excluded" data="left: ` + fmt.Sprintf("%d", d.Number[0]) + `, right: ` + fmt.Sprintf("%d", d.Number[1]) + `">`)
 		} else {
-			fmt.Fprintf(buf, `<tr>`)
+			fmt.Fprintf(buf, `<tr data="left: ` + fmt.Sprintf("%d", d.Number[0]) + `, right: ` + fmt.Sprintf("%d", d.Number[1]) + `">`)
 		}
 		num := d.Number
 		if d.Delta == "-" {
@@ -261,12 +264,12 @@ func HTMLDiff(difference []Line, header string) string {
 // numEqualStartAndEndElements returns the number of elements a and b
 // have in common from the beginning and from the end. If a and b are
 // equal, start will equal len(a) == len(b) and end will be zero.
-func numEqualStartAndEndElements(seq1, seq2 []string) (start, end int) {
-	for start < len(seq1) && start < len(seq2) && seq1[start] == seq2[start] {
+func numEqualStartAndEndElements(seq1, seq2 *[]string) (start, end int) {
+	for start < len(*seq1) && start < len(*seq2) && (*seq1)[start] == (*seq2)[start] {
 		start++
 	}
-	i, j := len(seq1)-1, len(seq2)-1
-	for i > start && j > start && seq1[i] == seq2[j] {
+	i, j := len(*seq1)-1, len(*seq2)-1
+	for i > start && j > start && (*seq1)[i] == (*seq2)[j] {
 		i--
 		j--
 		end++

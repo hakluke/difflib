@@ -73,7 +73,7 @@ func (d DiffRecord) String() string {
 }
 
 // Diff returns the result of diffing the seq1 and seq2.
-func Diff(seq1, seq2 *[]string, trim bool) (*[]Line) {
+func Diff(seq1, seq2 *[]string, trim bool) *[]Line {
 	withLinesNew := []Line{}
 	withLines := &withLinesNew
 
@@ -193,22 +193,22 @@ func HTMLDiff(difference []Line, header string) string {
 		}
 		// If the line is excluded from the difference, 'exclude' will be added as class to the html
 		if d.Exclude {
-			fmt.Fprintf(buf, `<tr class="excluded" data="left: ` + fmt.Sprintf("%d", d.Number[0]) + `, right: ` + fmt.Sprintf("%d", d.Number[1]) + `">`)
+			fmt.Fprintf(buf, `<tr class="excluded" data="left: `+fmt.Sprintf("%d", d.Number[0])+`, right: `+fmt.Sprintf("%d", d.Number[1])+`">`)
 		} else {
-			fmt.Fprintf(buf, `<tr data="left: ` + fmt.Sprintf("%d", d.Number[0]) + `, right: ` + fmt.Sprintf("%d", d.Number[1]) + `">`)
+			fmt.Fprintf(buf, `<tr data="left: `+fmt.Sprintf("%d", d.Number[0])+`, right: `+fmt.Sprintf("%d", d.Number[1])+`">`)
 		}
 		num := d.Number
 		if d.Delta == "-" {
 			diffLen := len(difference)
 			addition := 0
 			// Highlight word difference only if the current line is deleted and the next line is added, and they both have the same line num. Goes 3 lines deep. E.g. 3 lines deleted, then 3 lines added. So 3 lines modified
-			if (diffLen != index+1 && difference[index+1].Delta == "+" && difference[index].Number[0] == difference[index+1].Number[1]) {
+			if diffLen != index+1 && difference[index+1].Delta == "+" && difference[index].Number[0] == difference[index+1].Number[1] {
 				addition = 1
 			}
-			if (diffLen != index+1 && diffLen != index+2 && difference[index+2].Delta == "+" && difference[index].Number[0] == difference[index+2].Number[1]) {
+			if diffLen != index+1 && diffLen != index+2 && difference[index+2].Delta == "+" && difference[index].Number[0] == difference[index+2].Number[1] {
 				addition = 2
 			}
-			if (diffLen != index+1 && diffLen != index+2 && diffLen != index+3 && difference[index+3].Delta == "+" && difference[index].Number[0] == difference[index+3].Number[1]) {
+			if diffLen != index+1 && diffLen != index+2 && diffLen != index+3 && difference[index+3].Delta == "+" && difference[index].Number[0] == difference[index+3].Number[1] {
 				addition = 3
 			}
 			if addition != 0 {
@@ -228,18 +228,18 @@ func HTMLDiff(difference []Line, header string) string {
 			}
 		} else if d.Delta == "+" {
 			substraction := 0
-			if (index != 0 && difference[index-1].Delta == "-" && difference[index].Number[1] == difference[index-1].Number[0]) {
+			if index != 0 && difference[index-1].Delta == "-" && difference[index].Number[1] == difference[index-1].Number[0] {
 				substraction = 1
 			}
-			if (index != 0 && index != 1 && difference[index-2].Delta == "-" && difference[index].Number[1] == difference[index-2].Number[0]) {
+			if index != 0 && index != 1 && difference[index-2].Delta == "-" && difference[index].Number[1] == difference[index-2].Number[0] {
 				substraction = 2
 			}
-			if (index != 0 && index != 1 && index != 2 && difference[index-3].Delta == "-" && difference[index].Number[1] == difference[index-3].Number[0]) {
+			if index != 0 && index != 1 && index != 2 && difference[index-3].Delta == "-" && difference[index].Number[1] == difference[index-3].Number[0] {
 				substraction = 3
 			}
 			if substraction != 0 {
 				var content string
-				wDiffs = dmp.DiffMain(difference[index-substraction].Payload, d.Payload,  false)
+				wDiffs = dmp.DiffMain(difference[index-substraction].Payload, d.Payload, false)
 				for _, w := range wDiffs {
 					if w.Type == 1 {
 						content += "<span class=\"added-text\">" + html.EscapeString(w.Text) + "</span>"

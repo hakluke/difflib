@@ -6,9 +6,6 @@ import (
 	"bufio"
 	"crypto/md5"
 	"fmt"
-	"github.com/003random/difflib"
-	"github.com/gorilla/mux"
-	"github.com/yosssi/gohtml"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -16,6 +13,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/003random/difflib"
+	"github.com/gorilla/mux"
+	"github.com/yosssi/gohtml"
 
 	jsbeautifier "github.com/003random/jsbeautifier-go/jsbeautifier"
 )

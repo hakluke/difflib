@@ -73,7 +73,7 @@ func (d DiffRecord) String() string {
 }
 
 // Diff returns the result of diffing the seq1 and seq2.
-func Diff(seq1, seq2 *[]string, trim bool) *[]Line {
+func Diff(seq1, seq2 []string, trim bool) []Line {
 	withLinesNew := []Line{}
 	withLines := &withLinesNew
 
@@ -85,40 +85,40 @@ func Diff(seq1, seq2 *[]string, trim bool) *[]Line {
 	var startedAt int
 	var diff []DiffRecord
 	if !trim {
-		for _, content := range (*seq1)[:start] {
+		for _, content := range (seq1)[:start] {
 			diff = append(diff, DiffRecord{content, Common})
 		}
 	} else {
 		if start > 0 {
-			diff = append([]DiffRecord{DiffRecord{(*seq1)[start-1 : start][0], Common}}, diff...)
+			diff = append([]DiffRecord{DiffRecord{(seq1)[start-1 : start][0], Common}}, diff...)
 			startedAt = start - 1
 		}
 		if start > 1 {
-			diff = append([]DiffRecord{DiffRecord{(*seq1)[start-2 : start][0], Common}}, diff...)
+			diff = append([]DiffRecord{DiffRecord{(seq1)[start-2 : start][0], Common}}, diff...)
 			startedAt = start - 2
 		}
 		if start > 2 {
-			diff = append([]DiffRecord{DiffRecord{(*seq1)[start-3 : start][0], Common}}, diff...)
+			diff = append([]DiffRecord{DiffRecord{(seq1)[start-3 : start][0], Common}}, diff...)
 			startedAt = start - 3
 		}
 	}
 
-	diffRes := compute((*seq1)[start:len(*seq1)-end], (*seq2)[start:len(*seq2)-end])
+	diffRes := compute((seq1)[start:len(seq1)-end], (seq2)[start:len(seq2)-end])
 	diff = append(diff, diffRes...)
 
 	if !trim {
-		for _, content := range (*seq1)[len(*seq1)-end:] {
+		for _, content := range (seq1)[len(seq1)-end:] {
 			diff = append(diff, DiffRecord{content, Common})
 		}
 	} else {
 		if end > 0 {
-			diff = append(diff, DiffRecord{(*seq1)[len(*seq1)-end : len(*seq1)-end+1][0], Common})
+			diff = append(diff, DiffRecord{(seq1)[len(seq1)-end : len(seq1)-end+1][0], Common})
 		}
 		if end > 1 {
-			diff = append(diff, DiffRecord{(*seq1)[len(*seq1)-end : len(*seq1)-end+2][1], Common})
+			diff = append(diff, DiffRecord{(seq1)[len(seq1)-end : len(seq1)-end+2][1], Common})
 		}
 		if end > 2 {
-			diff = append(diff, DiffRecord{(*seq1)[len(*seq1)-end : len(*seq1)-end+3][2], Common})
+			diff = append(diff, DiffRecord{(seq1)[len(seq1)-end : len(seq1)-end+3][2], Common})
 		}
 	}
 
@@ -156,7 +156,9 @@ func Diff(seq1, seq2 *[]string, trim bool) *[]Line {
 		}
 	}
 
-	return withLines
+	seq1 = nil
+	seq2 = nil
+	return *withLines
 }
 
 // HTMLDiff returns the results of diffing seq1 and seq2 as an HTML
@@ -264,12 +266,12 @@ func HTMLDiff(difference []Line, header string) string {
 // numEqualStartAndEndElements returns the number of elements a and b
 // have in common from the beginning and from the end. If a and b are
 // equal, start will equal len(a) == len(b) and end will be zero.
-func numEqualStartAndEndElements(seq1, seq2 *[]string) (start, end int) {
-	for start < len(*seq1) && start < len(*seq2) && (*seq1)[start] == (*seq2)[start] {
+func numEqualStartAndEndElements(seq1, seq2 []string) (start, end int) {
+	for start < len(seq1) && start < len(seq2) && (seq1)[start] == (seq2)[start] {
 		start++
 	}
-	i, j := len(*seq1)-1, len(*seq2)-1
-	for i > start && j > start && (*seq1)[i] == (*seq2)[j] {
+	i, j := len(seq1)-1, len(seq2)-1
+	for i > start && j > start && (seq1)[i] == (seq2)[j] {
 		i--
 		j--
 		end++
@@ -308,6 +310,7 @@ func longestCommonSubsequenceMatrix(seq1, seq2 []string) [][]int {
 // compute is the unexported helper for Diff that returns the results of
 // diffing left and right.
 func compute(seq1, seq2 []string) (diff []DiffRecord) {
+	fmt.Println(len(seq1), len(seq2))
 	matrix := longestCommonSubsequenceMatrix(seq1, seq2)
 	i, j := len(seq1), len(seq2)
 	for i > 0 || j > 0 {

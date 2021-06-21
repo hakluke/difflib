@@ -595,7 +595,7 @@ func getResponseAsSlice(resp string, beautify, isJS bool) []string {
 	}
 	if err := s.Err(); err != nil {
 		log.Print(err)
-		return []string{}
+		return ([]string{})
 	}
 
 	return body

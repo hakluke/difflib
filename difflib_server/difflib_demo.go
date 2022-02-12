@@ -14,11 +14,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/003random/difflib"
 	"github.com/gorilla/mux"
+	"github.com/hakluke/difflib"
 	"github.com/yosssi/gohtml"
 
-	jsbeautifier "github.com/003random/jsbeautifier-go/jsbeautifier"
+	jsbeautifier "github.com/hakluke/jsbeautifier-go/jsbeautifier"
 )
 
 var templateString = `

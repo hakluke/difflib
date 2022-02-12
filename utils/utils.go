@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/003random/difflib"
+	"github.com/hakluke/difflib"
 	"github.com/google/uuid"
 )
 
